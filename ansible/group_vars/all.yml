@@ -1,0 +1,27 @@
+---
+# Absolute path where the project will live on the target host
+project_root: /opt/projeto-korp
+
+# Path of this repository on the control node (parent of ansible/)
+repo_root: "{{ playbook_dir }}/.."
+
+# Docker
+docker_network_name: korp-net
+docker_network_subnet: 172.28.0.0/16
+compose_project_name: projeto-korp
+
+# Application
+app_image_name: korp/http-server-projeto-korp
+app_version: "1.0.0"
+
+# Grafana credentials (override with --extra-vars or Ansible Vault)
+grafana_admin_user: admin
+grafana_admin_password: "change-me"
+
+# Prometheus
+prometheus_retention: 15d
+
+# Validation
+service_url: "http://localhost:80/projeto-korp"
+validation_retries: 30
+validation_delay: 3

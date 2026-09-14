@@ -1,0 +1,448 @@
+{
+  "uid": "korp-service-dashboard",
+  "title": "http-server-projeto-korp — Service Overview",
+  "tags": ["projeto-korp", "golang", "devops"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "prometheus-korp" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Availability (app)",
+      "id": 1,
+      "gridPos": { "h": 3, "w": 3, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(korp_service_up) or vector(0)",
+          "legendFormat": "korp_service_up"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "DOWN",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red", "index": 0 },
+                "1": { "text": "UP", "color": "green", "index": 1 }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Scrape Health (app)",
+      "id": 2,
+      "gridPos": { "h": 3, "w": 3, "x": 3, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(korp_service_up) or vector(0)",
+          "legendFormat": "up"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Availability (end-to-end)",
+      "id": 3,
+      "gridPos": { "h": 3, "w": 3, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(probe_success{job=\"blackbox-http-korp\"}) or max(probe_success{job=\"blackbox-http-nginx\"}) or max(nginx_up) or vector(0)",
+          "legendFormat": "korp_service_up"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "DOWN",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red", "index": 0 },
+                "1": { "text": "UP", "color": "green", "index": 1 }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Health (end-to-end)",
+      "id": 4,
+      "gridPos": { "h": 3, "w": 3, "x": 9, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(probe_success{job=\"blackbox-http-korp\"}) or max(probe_success{job=\"blackbox-http-nginx\"}) or max(nginx_up) or vector(0)",
+          "legendFormat": "up"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "nginx",
+      "id": 5,
+      "gridPos": { "h": 2, "w": 3, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        { "refId": "A", "expr": "max(probe_success{job=\"blackbox-http-nginx\"}) or max(nginx_up) or vector(0)", "legendFormat": "nginx" }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Prometheus communication problems",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red", "index": 0 },
+                "1": { "text": "UP", "color": "green", "index": 1 }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "Prometheus communication problems", "color": "orange", "index": 2 }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "nginx-exporter",
+      "id": 6,
+      "gridPos": { "h": 2, "w": 3, "x": 3, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        { "refId": "A", "expr": "max(up{job=\"nginx\"}) or vector(0)", "legendFormat": "nginx-exporter" }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Prometheus communication problems",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red", "index": 0 },
+                "1": { "text": "UP", "color": "green", "index": 1 }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "Prometheus communication problems", "color": "orange", "index": 2 }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "blackbox-exporter",
+      "id": 7,
+      "gridPos": { "h": 2, "w": 3, "x": 6, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(up{job=\"blackbox-http-nginx\"}) or vector(0)",
+          "legendFormat": "blackbox-exporter"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Prometheus communication problems",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red", "index": 0 },
+                "1": { "text": "UP", "color": "green", "index": 1 }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "Prometheus communication problems", "color": "orange", "index": 2 }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "prometheus",
+      "id": 8,
+      "gridPos": { "h": 2, "w": 3, "x": 9, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        { "refId": "A", "expr": "max(up{job=\"prometheus\"}) or vector(0)", "legendFormat": "prometheus" }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Prometheus communication problems",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red", "index": 0 },
+                "1": { "text": "UP", "color": "green", "index": 1 }
+              }
+            },
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": { "text": "Prometheus communication problems", "color": "orange", "index": 2 }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Availability last 24h (%)",
+      "id": 9,
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg_over_time(up{job=\"http-server-projeto-korp\"}[24h]) * 100",
+          "legendFormat": "availability"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "decimals": 3, "noValue": "0" },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Total Requests (range)",
+      "id": 10,
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(korp_http_requests_total[$__range]))",
+          "legendFormat": "requests"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "noValue": "0", "decimals": 0 },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Volume by Path (req/s)",
+      "id": 11,
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (path) (rate(korp_http_requests_total[1m]))",
+          "legendFormat": "{{path}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "lineWidth": 2 } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests by HTTP Status (req/s)",
+      "id": 12,
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(korp_http_requests_total[1m]))",
+          "legendFormat": "HTTP {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "stacking": { "mode": "normal" } } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency p50 / p90 / p99 (seconds)",
+      "id": 14,
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(korp_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.90, sum by (le) (rate(korp_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p90"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(korp_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Black-box Probe: success, duration & exporter up",
+      "id": 15,
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(probe_success{job=\"blackbox-http-korp\"}) or vector(0)",
+          "legendFormat": "probe success"
+        },
+        {
+          "refId": "B",
+          "expr": "max(probe_duration_seconds{job=\"blackbox-http-korp\"}) or vector(0)",
+          "legendFormat": "probe duration (s)"
+        },
+        {
+          "refId": "C",
+          "expr": "max(up{job=\"blackbox-http-korp\"}) or vector(0)",
+          "legendFormat": "exporter up"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "In-flight Requests & NGINX Connections",
+      "id": 22,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-korp" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(korp_http_requests_in_flight) or vector(0)",
+          "legendFormat": "app in-flight"
+        },
+        {
+          "refId": "B",
+          "expr": "max(nginx_connections_active) or vector(0)",
+          "legendFormat": "nginx active connections"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(nginx_http_requests_total[1m])) or vector(0)",
+          "legendFormat": "nginx req/s"
+        },
+        {
+          "refId": "D",
+          "expr": "max(up{job=\"nginx\"}) or vector(0)",
+          "legendFormat": "nginx-exporter up"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,319 @@
+---
+- name: Provision the full Projeto Korp environment (Docker + app + monitoring)
+  hosts: korp
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - group_vars/all.yml
+
+  pre_tasks:
+    - name: Fail fast on non Debian-family hosts
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['os_family'] == 'Debian'
+        fail_msg: "This playbook targets Debian-family systems only."
+        success_msg: >-
+          Detected {{ ansible_facts['distribution'] }}
+          {{ ansible_facts['distribution_release'] | default('unknown') }}.
+
+  tasks:
+    # =====================================================================
+    # 1. Docker installation
+    # =====================================================================
+    - name: Install base packages required by the Docker repository
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - apt-transport-https
+          - python3-pip
+          - python3-requests
+          - python3-debian
+          - git
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Create the APT keyrings directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Download the Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+        force: false
+
+    # Debian "forky" (14) has no Docker repo suite yet -> pin to the newest
+    # supported stable suite.
+    - name: Resolve the Docker APT suite for this Debian release
+      ansible.builtin.set_fact:
+        docker_apt_suite: >-
+          {{ 'trixie'
+             if ansible_facts['distribution_release'] in ['forky', 'sid', 'trixie']
+             else ansible_facts['distribution_release'] }}
+
+    - name: Remove the legacy one-line Docker repo file (avoids duplicate sources)
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/docker.list
+        state: absent
+
+    - name: Add the official Docker APT repository
+      ansible.builtin.deb822_repository:
+        name: docker
+        types: deb
+        uris: "https://download.docker.com/linux/debian"
+        suites: "{{ docker_apt_suite }}"
+        components: stable
+        architectures: "{{ ansible_facts['architecture'] | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}"
+        signed_by: /etc/apt/keyrings/docker.asc
+        state: present
+        enabled: true
+      notify: Update apt cache
+
+    - name: Install Docker Engine, CLI, containerd and the Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Configure the Docker daemon (log rotation and live-restore)
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": { "max-size": "10m", "max-file": "3" },
+            "live-restore": true,
+            "default-address-pools": [
+              { "base": "172.30.0.0/16", "size": 24 }
+            ]
+          }
+      notify: Restart Docker
+
+    - name: Ensure Docker is enabled and running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Add the invoking user to the docker group
+      ansible.builtin.user:
+        name: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id']) }}"
+        groups: docker
+        append: true
+
+    - name: Flush handlers so Docker is restarted before we use it
+      ansible.builtin.meta: flush_handlers
+
+    # =====================================================================
+    # 2. Project files
+    # =====================================================================
+    - name: Create the project directory tree
+      ansible.builtin.file:
+        path: "{{ project_root }}/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - app
+        - nginx/conf.d
+        - monitoring/prometheus
+        - monitoring/grafana/provisioning/datasources
+        - monitoring/grafana/provisioning/dashboards
+
+    - name: Copy the Go application sources and Dockerfile
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/app/"
+        dest: "{{ project_root }}/app/"
+        mode: "0644"
+        directory_mode: "0755"
+      notify: Rebuild and restart the stack
+
+    - name: Deploy the NGINX reverse proxy configuration
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/nginx/conf.d/http-server-projeto-korp.conf"
+        dest: "{{ project_root }}/nginx/conf.d/http-server-projeto-korp.conf"
+        mode: "0644"
+      notify: Reload NGINX
+
+    - name: Deploy the Prometheus configuration
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/monitoring/prometheus/prometheus.yml"
+        dest: "{{ project_root }}/monitoring/prometheus/prometheus.yml"
+        mode: "0644"
+      notify: Rebuild and restart the stack
+
+    - name: Deploy the Grafana provisioning files (datasource + dashboards)
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/monitoring/grafana/provisioning/"
+        dest: "{{ project_root }}/monitoring/grafana/provisioning/"
+        mode: "0644"
+        directory_mode: "0755"
+      notify: Rebuild and restart the stack
+
+    - name: Deploy docker-compose.yml
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/docker-compose.yml"
+        dest: "{{ project_root }}/docker-compose.yml"
+        mode: "0644"
+      notify: Rebuild and restart the stack
+
+    - name: Render the .env file consumed by Docker Compose
+      ansible.builtin.copy:
+        dest: "{{ project_root }}/.env"
+        mode: "0640"
+        content: |
+          # Managed by Ansible - do not edit manually
+          APP_VERSION={{ app_version }}
+          GRAFANA_ADMIN_USER={{ grafana_admin_user }}
+          GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
+          PROMETHEUS_RETENTION={{ prometheus_retention }}
+      notify: Rebuild and restart the stack
+
+    # =====================================================================
+    # 3. Docker network - commented: leaving the Composer to create
+    # =====================================================================
+    - name: Create the bridge network used by all containers
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_network_subnet }}"
+        state: present
+
+    # =====================================================================
+    # 4. Build the application image
+    # =====================================================================
+    - name: Generate go.sum if it is missing (uses a throwaway Go container)
+      ansible.builtin.command:
+        cmd: >-
+          docker run --rm -v {{ project_root }}/app:/src -w /src
+          golang:1.27-alpine go mod tidy
+        creates: "{{ project_root }}/app/go.sum"
+
+    - name: Build the http-server-projeto-korp image
+      community.docker.docker_image:
+        name: "{{ app_image_name }}"
+        tag: "{{ app_version }}"
+        source: build
+        force_source: true
+        build:
+          path: "{{ project_root }}/app"
+          dockerfile: Dockerfile
+          pull: true
+          args:
+            APP_VERSION: "{{ app_version }}"
+
+    # =====================================================================
+    # 5. Bring up the whole stack
+    # =====================================================================
+    - name: Stop any host web server occupying port 80
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop:
+        - nginx
+        - apache2
+        - lighttpd
+      failed_when: false
+
+    - name: Start the stack with Docker Compose
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_root }}"
+        project_name: "{{ compose_project_name }}"
+        state: present
+        pull: missing
+        remove_orphans: true
+      register: compose_result
+
+    - name: Show the containers managed by Compose
+      ansible.builtin.debug:
+        msg: "{{ compose_result.containers | default([]) | map(attribute='Name') | list }}"
+
+    # =====================================================================
+    # 6. Validation
+    # =====================================================================
+    - name: Wait until the service answers through the reverse proxy
+      ansible.builtin.uri:
+        url: "{{ service_url }}"
+        method: GET
+        return_content: true
+        status_code: 200
+      register: korp_check
+      retries: "{{ validation_retries }}"
+      delay: "{{ validation_delay }}"
+      until: korp_check.status == 200 and 'Projeto Korp' in korp_check.content
+
+    - name: Print the service response in the console
+      ansible.builtin.debug:
+        msg:
+          - "GET {{ service_url }} -> HTTP {{ korp_check.status }}"
+          - "Raw body   : {{ korp_check.content }}"
+          - "nome       : {{ (korp_check.content | from_json).nome }}"
+          - "horario UTC: {{ (korp_check.content | from_json).horario }}"
+
+    - name: Verify the Prometheus target is UP
+      ansible.builtin.uri:
+        url: "http://localhost:9090/api/v1/query?query=korp_service_up"
+        return_content: true
+      register: prom_check
+      retries: 20
+      delay: 3
+      until: (prom_check.content | from_json).data.result | length > 0
+
+    - name: Print the availability metric collected by Prometheus
+      ansible.builtin.debug:
+        msg: "korp_service_up = {{ (prom_check.content | from_json).data.result[0].value[1] }}"
+
+    - name: Confirm the Grafana API is healthy
+      ansible.builtin.uri:
+        url: http://localhost:3000/api/health
+        return_content: true
+      register: grafana_check
+      retries: 20
+      delay: 3
+      until: grafana_check.status == 200
+
+    - name: Final summary
+      ansible.builtin.debug:
+        msg:
+          - "Application : http://localhost/projeto-korp"
+          - "Prometheus  : http://localhost:9090"
+          - "Grafana     : http://localhost:3000 (user: {{ grafana_admin_user }})"
+          - "Dashboard   : http://localhost:3000/d/korp-service-dashboard"
+
+  handlers:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Restart Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+
+    - name: Reload NGINX
+      community.docker.docker_container_exec:
+        container: nginx
+        command: nginx -s reload
+      failed_when: false
+
+    - name: Rebuild and restart the stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_root }}"
+        project_name: "{{ compose_project_name }}"
+        state: restarted
+        build: always

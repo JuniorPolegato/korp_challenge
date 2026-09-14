@@ -1,0 +1,35 @@
+# Secrets / environment
+.env
+.env.local
+!.env.example
+ansible/vault_pass*
+secrets.yml
+*.vault
+
+# Go
+/app/http-server-projeto-korp
+*.exe
+*.test
+*.out
+vendor/
+
+# Ansible
+*.retry
+ansible/inventory.local.ini
+
+# Runtime data
+monitoring/prometheus/data/
+monitoring/grafana/data/
+*.log
+
+# Archives / build artifacts
+*.tar
+*.tar.gz
+*.tgz
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
